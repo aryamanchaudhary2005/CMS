@@ -1,0 +1,177 @@
+CREATE DATABASE CrimeManagementDB;
+USE CrimeManagementDB;
+
+-- Step 1: Create Roles table first
+CREATE TABLE Roles (
+    RoleID INT AUTO_INCREMENT PRIMARY KEY,
+    RoleType VARCHAR(100) UNIQUE NOT NULL,
+    RoleDescription TEXT
+);
+
+-- Step 2: Create Login table with foreign key to Roles
+CREATE TABLE Login (
+    UserName VARCHAR(50) PRIMARY KEY,
+    Password VARCHAR(100) NOT NULL,
+    UserType ENUM('Admin', 'Operator') NOT NULL,
+    RoleID INT NOT NULL UNIQUE,
+    FOREIGN KEY (RoleID) REFERENCES Roles(RoleID) ON DELETE CASCADE
+);
+
+-- Step 3: Create Admin table
+CREATE TABLE Admin (
+    AdminUser VARCHAR(50) PRIMARY KEY,
+    AdminPass VARCHAR(100) NOT NULL,
+    UserName VARCHAR(50) UNIQUE,
+    FOREIGN KEY (UserName) REFERENCES Login(UserName) ON DELETE CASCADE
+);
+
+-- Step 4: Create Operator table
+CREATE TABLE Operator (
+    OperatorUser VARCHAR(50) PRIMARY KEY,
+    OperatorPass VARCHAR(100) NOT NULL,
+    OperatorName VARCHAR(100),
+    Image BLOB,
+    UserName VARCHAR(50) UNIQUE,
+    FOREIGN KEY (UserName) REFERENCES Login(UserName) ON DELETE CASCADE
+);
+
+-- Step 5: Create Permissions table
+CREATE TABLE Permissions (
+    PermissionID INT AUTO_INCREMENT PRIMARY KEY,
+    RoleID INT NOT NULL,
+    PermissionType VARCHAR(100) NOT NULL,
+    FOREIGN KEY (RoleID) REFERENCES Roles(RoleID) ON DELETE CASCADE
+);
+
+-- Step 6: Create Criminal table
+CREATE TABLE Criminal (
+    CriminalID INT PRIMARY KEY AUTO_INCREMENT,
+    CriminalNo VARCHAR(50) UNIQUE NOT NULL,
+    Name VARCHAR(100) NOT NULL,
+    Address TEXT,
+    Aadhaar VARCHAR(12) UNIQUE,
+    Image BLOB
+);
+
+-- Step 7: Create FIR table
+CREATE TABLE FIR (
+    FIRNo INT PRIMARY KEY,
+    Name VARCHAR(100) NOT NULL,
+    Date DATE NOT NULL,
+    Crime VARCHAR(255) NOT NULL,
+    Gender ENUM('Male', 'Female', 'Other') NOT NULL,
+    Alias VARCHAR(100),
+    Address TEXT,
+    Aadhaar VARCHAR(12) UNIQUE,
+    Image BLOB,
+    CriminalID INT NOT NULL,
+    FOREIGN KEY (CriminalID) REFERENCES Criminal(CriminalID) ON DELETE CASCADE
+);
+
+-- Step 8: Create Manages table
+CREATE TABLE Manages (
+    UserName VARCHAR(50),
+    FIRNo INT,
+    CriminalID INT,
+    PRIMARY KEY (UserName, FIRNo, CriminalID),
+    FOREIGN KEY (UserName) REFERENCES Login(UserName) ON DELETE CASCADE,
+    FOREIGN KEY (FIRNo) REFERENCES FIR(FIRNo) ON DELETE CASCADE,
+    FOREIGN KEY (CriminalID) REFERENCES Criminal(CriminalID) ON DELETE CASCADE
+);
+
+-- Insert sample roles
+INSERT INTO Roles (RoleType, RoleDescription) VALUES 
+('Admin', 'Full Access'),
+('Operator', 'Manage FIRs and Criminals');
+
+-- Insert sample logins with RoleIDs
+INSERT INTO Login (UserName, Password, UserType, RoleID) VALUES 
+('admin1', 'securepass', 'Admin', 1),
+('operator1', 'operatorpass', 'Operator', 2);
+
+-- Insert Admin and Operator users
+INSERT INTO Admin (AdminUser, AdminPass, UserName) VALUES 
+('admin1', 'securepass', 'admin1');
+
+INSERT INTO Operator (OperatorUser, OperatorPass, OperatorName, UserName) VALUES 
+('operator1', 'operatorpass', 'John Doe', 'operator1');
+
+-- Insert sample permissions
+INSERT INTO Permissions (RoleID, PermissionType) VALUES 
+(1, 'Manage Users'),
+(2, 'Manage FIRs');
+
+-- Insert sample criminal
+INSERT INTO Criminal (CriminalNo, Name, Address, Aadhaar) VALUES 
+('CR123', 'John Smith', '123 Street, City', '123456789012');
+
+-- Insert sample FIR
+INSERT INTO FIR (FIRNo, Name, Date, Crime, Gender, Alias, Address, Aadhaar, CriminalID) VALUES 
+(1, 'Jane Doe', '2024-02-01', 'Theft', 'Female', 'JD', '456 Road, City', '234567890123', 1);
+
+-- Insert into Manages
+INSERT INTO Manages (UserName, FIRNo, CriminalID) VALUES 
+('admin1', 1, 1);
+
+
+SELECT o.OperatorUser, o.OperatorName, r.RoleType AS RoleName
+FROM Operator o
+JOIN Login l ON o.UserName = l.UserName
+JOIN Roles r ON l.RoleID = r.RoleID;
+
+
+CREATE VIEW OperatorSummary AS
+SELECT o.OperatorUser, o.OperatorName, l.UserType, r.RoleType AS RoleName
+FROM Operator o
+JOIN Login l ON o.UserName = l.UserName
+JOIN Roles r ON l.RoleID = r.RoleID;
+
+SHOW FULL TABLES IN CrimeManagementDB WHERE TABLE_TYPE LIKE 'VIEW';
+
+
+SELECT UserName FROM Admin
+UNION
+SELECT UserName FROM Operator;
+
+
+CREATE TABLE OperatorAuditLog (
+    LogID INT AUTO_INCREMENT PRIMARY KEY,
+    OperatorUser VARCHAR(50),
+    DeletedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+DELIMITER //
+CREATE TRIGGER trg_OperatorDelete
+AFTER DELETE ON Operator
+FOR EACH ROW
+BEGIN
+    INSERT INTO OperatorAuditLog (OperatorUser)
+    VALUES (OLD.OperatorUser);
+END;
+//
+DELIMITER ;
+
+
+DELIMITER //
+CREATE PROCEDURE PrintOperatorUsers()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE oUser VARCHAR(50);
+    DECLARE cur CURSOR FOR SELECT OperatorUser FROM Operator;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    OPEN cur;
+
+    read_loop: LOOP
+        FETCH cur INTO oUser;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        -- Simulate print
+        SELECT CONCAT('Operator User: ', oUser) AS Output;
+    END LOOP;
+
+    CLOSE cur;
+END;
+//
+DELIMITER ;
